@@ -12,6 +12,7 @@ import be.tarsos.dsp.io.TarsosDSPAudioFormat
 import be.tarsos.dsp.io.android.AndroidFFMPEGLocator
 import be.tarsos.dsp.io.android.AudioDispatcherFactory
 import be.tarsos.dsp.util.fft.FFT
+import be.tarsos.dsp.util.fft.HammingWindow
 import be.tarsos.dsp.util.fft.HannWindow
 
 import io.reactivex.Observable
@@ -35,9 +36,8 @@ enum class ProcessingError(val value: String) {
 }
 
 class ViewModel {
-
-    private val bufferSize = 1024
     private val sampleSize = 8
+    private val bufferSize = 1024 * sampleSize
     private val samplingFrequency = 44100
     private var silenceThreashold: Float = 10.0f
     private val maxNeighbor = 7
@@ -53,7 +53,7 @@ class ViewModel {
     var startNextFingerPrinting = PublishSubject.create<Boolean>()
     var detectionResult = PublishSubject.create<String>()
     var averageMagnitude = PublishSubject.create<Float>()
-
+    var isListening: Boolean = false
     /*constructor(context: Context) {
         applicationContext = context
     }
@@ -80,202 +80,50 @@ class ViewModel {
 
     private fun processAudioFile(url: Uri) {
         sampleCount = 0
+        if (audioEngine != null) {
+            audioEngine = null
+        }
 
-        //launch {
-            if (audioEngine != null) {
-                audioEngine = null
-            }
-
-
+        launch {
             audioEngine = AudioDispatcherFactory.fromPipe(url.path, samplingFrequency, bufferSize, 0)
 
             audioEngine!!.addAudioProcessor(FTTProcess())
-        /*
-            audioEngine?.addAudioProcessor(object: AudioProcessor{
-                var window = HannWindow()
-                var fft = FFT(bufferSize, window)
-                val fftSize = bufferSize / 2
-                var amplitudes = FloatArray(fftSize)
-                var time: Double = 0.0
-                var audioEvents: ArrayList<AudioEvent> = arrayListOf()
-
-                fun extractPeak() {
-                    //fun extractPeaks() {
-                     for (audioEvent in audioEvents) {
-                         var magz = FloatArray(fftSize)
-                         val audioBuffer = audioEvent.floatBuffer
-                         fft.forwardTransform(audioBuffer)
-                         fft.modulus(audioBuffer, magz)
-                         time = audioEvent.timeStamp
-                         var magnitudes: Array<Float> = arrayOf(0.0f, 0.0f, 0.0f, 0.0f)
-                         var frequencies: Array<Int> = arrayOf(0, 0, 0, 0)
-                         val max = freqPins.last() - 1
-                         for (i in 0..max) {
-                             val mag = magz[i]
-                             val freq = i * samplingFrequency / (bufferSize * sampleSize)
-
-                             when (i) {
-                                 in freqPins[0] until freqPins[1] ->
-                                     if (magnitudes[0] < mag) {
-                                         frequencies[0] = freq
-                                         magnitudes[0] = mag
-                                     }
-                                 in freqPins[1] until freqPins[2] ->
-                                     if (magnitudes[1] < mag) {
-                                         frequencies[1] = freq
-                                         magnitudes[1] = mag
-                                     }
-                                 in freqPins[2] until freqPins[3] ->
-                                     if (magnitudes[2] < mag) {
-                                         frequencies[2] = freq
-                                         magnitudes[2] = mag
-                                     }
-                                 in freqPins[3] until freqPins[4] ->
-                                     if (magnitudes[3] < mag) {
-                                         frequencies[3] = freq
-                                         magnitudes[3] = mag
-                                     }
-
-                             }
-
-                         }
-
-                         val highestMagnitude = magnitudes.sorted().last() ?: 0.0f
-
-                         //if (highestMagnitude > silenceThreashold) {
-
-                         for (x in 0 until freqPins.count()) {
-                             val fp = FPModel(sampleCount, frequencies[x], magnitudes[x], time, x + 1)
-                             peaks.add(fp)
-                         }
-
-
-                         //}
-
-                     }
-
-
-
-
-                }
-
-                override fun process(audioEvent: AudioEvent): Boolean {
-                    Log.d("SWATTI", "process")
-                    audioEvents.add(audioEvent)
-                    //val audioBuffer = audioEvent.floatBuffer
-                    //fft.forwardTransform(audioBuffer)
-                    //fft.modulus(audioBuffer, amplitudes)
-                    //time = audioEvent.timeStamp
-                    //extractPeaks(amplitudes, audioEvent.timeStamp,  amplitudes.size)
-                    // for (i in 0 until amplitudes.length) {
-                    // Log.d(TAG, String.format("Amplitude at %3d Hz: %8.3f", fft.binToHz(i, sampleRate) as Int, amplitudes[i]))
-                    //}
-
-                    return true
-                }
-
-                override fun processingFinished() {
-                    Log.d("SWATTI", "process done")
-                    for (audioEvent in audioEvents) {
-                        var magz = FloatArray(fftSize)
-                        val audioBuffer = audioEvent.floatBuffer
-                        fft.forwardTransform(audioBuffer)
-                        fft.modulus(audioBuffer, magz)
-                        time = audioEvent.timeStamp
-                        var magnitudes: Array<Float> = arrayOf(0.0f, 0.0f, 0.0f, 0.0f)
-                        var frequencies: Array<Int> = arrayOf(0, 0, 0, 0)
-                        val max = freqPins.last() - 1
-                        for (i in 0..max) {
-                            val mag = magz[i]
-                            val freq = i * samplingFrequency / (bufferSize * sampleSize)
-
-                            when (i) {
-                                in freqPins[0] until freqPins[1] ->
-                                    if (magnitudes[0] < mag) {
-                                        frequencies[0] = freq
-                                        magnitudes[0] = mag
-                                    }
-                                in freqPins[1] until freqPins[2] ->
-                                    if (magnitudes[1] < mag) {
-                                        frequencies[1] = freq
-                                        magnitudes[1] = mag
-                                    }
-                                in freqPins[2] until freqPins[3] ->
-                                    if (magnitudes[2] < mag) {
-                                        frequencies[2] = freq
-                                        magnitudes[2] = mag
-                                    }
-                                in freqPins[3] until freqPins[4] ->
-                                    if (magnitudes[3] < mag) {
-                                        frequencies[3] = freq
-                                        magnitudes[3] = mag
-                                    }
-
-                            }
-
-                        }
-
-                        val highestMagnitude = magnitudes.sorted().last() ?: 0.0f
-
-                        //if (highestMagnitude > silenceThreashold) {
-
-                        for (x in 0 until freqPins.count()) {
-                            val fp = FPModel(sampleCount, frequencies[x], magnitudes[x], time, x + 1)
-                            peaks.add(fp)
-                        }
-
-
-                        //}
-
-                    }
-
-                    Log.d("SWATTI", "STOP")
-                    //extractPeaks(amplitudes, time,  amplitudes.size)
-                    //peakMap()
-                    //micAudioEngine?.stop()
-                    //audioEngine?.stop()
-                    print("done")
-                }
-            })
-            */
             audioEngine!!.run()
-        //}
+        }
+
+
 
     }
 
 
     fun listenToMic() {
+        isListening = true
         sampleCount = 0
         silenceThreashold = 10.0f
 
+        if (micAudioEngine != null) {
+            micAudioEngine = null
+        }
 
         launch {
-
-            if (micAudioEngine == null) {
-                micAudioEngine = AudioDispatcherFactory.fromDefaultMicrophone(samplingFrequency, bufferSize, 0)
-
-
-            }
-            val audioFormat = TarsosDSPAudioFormat(samplingFrequency.toFloat(), sampleSize, 1, true, false )
-
-            //micAudioEngine?.addAudioProcessor(fftAudioProcess)
+            micAudioEngine = AudioDispatcherFactory.fromDefaultMicrophone(samplingFrequency, bufferSize, 0)
+            micAudioEngine?.addAudioProcessor(FTTProcess())
             micAudioEngine?.run()
-
         }
 
     }
 
 
-    fun extractPeaks(magz: FloatArray, time: Double, size: Int) {
-    //fun extractPeaks() {
+    fun extractPeaks(magz: FloatArray, time: Double, size: Int, fftSize: Int) {
 
+            var bufferSpectrum: LinkedHashMap<Int, Float> = linkedMapOf()
             var magnitudes: Array<Float> = arrayOf(0.0f, 0.0f, 0.0f, 0.0f)
             var frequencies: Array<Int> = arrayOf(0, 0, 0, 0)
             val max = freqPins.last() - 1
             for (i in 0..max) {
                 val mag = magz[i]
-                val freq = i * samplingFrequency / (bufferSize * sampleSize)
-
+                val freq = i * samplingFrequency / fftSize
+                bufferSpectrum[freq] = mag
                 when (i) {
                     in freqPins[0] until freqPins[1] ->
                         if (magnitudes[0] < mag) {
@@ -306,8 +154,9 @@ class ViewModel {
 
             //if (highestMagnitude > silenceThreashold) {
 
-            for (x in 0 until freqPins.count()) {
-                val fp = FPModel(sampleCount, frequencies[x], magnitudes[x], time, x + 1)
+            for (x in 0 until freqPins.size-1) {
+                val band = x + 1
+                val fp = FPModel(sampleCount, frequencies[x], magnitudes[x], time, band)
                 peaks.add(fp)
             }
 
@@ -321,10 +170,7 @@ class ViewModel {
                 //averageMagnitude.onNext(average)
             }
 
-
-
-        peakMap()
-
+        spectrum(bufferSpectrum)
 
     }
 
@@ -482,11 +328,9 @@ class ViewModel {
     }
 
 
-    fun stop() {
+    fun stopMic() {
+        isListening = false
         micAudioEngine?.stop()
-        audioEngine?.stop()
-
-        // peakMap()
 
         detectSong().subscribeOn(Schedulers.computation()).subscribe({
             detectionResult.onNext(it)
@@ -507,15 +351,31 @@ class ViewModel {
 
 
         /*for Visualization peak map only*/
+        fun spectrum(linkedHashMap: LinkedHashMap<Int, Float>) {
+            var freqs: ArrayList<Int> = arrayListOf()
+            var magnitudes:  ArrayList<Float> = arrayListOf()
+
+
+            for (fp in linkedHashMap) {
+                freqs.add(fp.key)
+                magnitudes.add(fp.value)
+
+            }
+
+            Log.d("SAWTTI", "freq = $freqs;")
+            Log.d("SAWTTI", "magz = $magnitudes;")
+            Log.d("SAWTTI", "------------------------------------")
+        }
+
         fun peakMap() {
             var freq: ArrayList<Int> = arrayListOf()
-            var time:  ArrayList<Int> = arrayListOf()
+            var time:  ArrayList<Double> = arrayListOf()
 
             for (fp in peaks) {
                 freq.add(fp.frequency)
-                time.add(fp.position)
+                time.add(fp.time)
 
-                Log.d("SAWTTI", "freq = ${fp.frequency} , time = ${fp.position};")
+                Log.d("SAWTTI", "freq = ${fp.frequency} , time = ${fp.time};")
             }
 
             //Log.d("SAWTTI", "freq = $freq;")
@@ -525,99 +385,30 @@ class ViewModel {
 
     inner class FTTProcess:AudioProcessor {
 
-            var window = HannWindow()
-            var fft = FFT(bufferSize, window)
-            val fftSize = bufferSize / 2
-            var amplitudes = FloatArray(fftSize)
-            var time: Double = 0.0
-            var audioEvents: ArrayList<AudioEvent> = arrayListOf()
-
-        protected fun finalize() {
-           Log.d("SAWTTI","goodbye")
-        }
-
-            private fun extractPeak() {
-                //fun extractPeaks() {
-                for (audioEvent in audioEvents) {
-                    var magz = FloatArray(fftSize)
-                    val audioBuffer = audioEvent.floatBuffer
-                    fft.forwardTransform(audioBuffer)
-                    fft.modulus(audioBuffer, magz)
-                    time = audioEvent.timeStamp
-                    var magnitudes: Array<Float> = arrayOf(0.0f, 0.0f, 0.0f, 0.0f)
-                    var frequencies: Array<Int> = arrayOf(0, 0, 0, 0)
-                    val max = freqPins.last() - 1
-                    for (i in 0..max) {
-                        val mag = magz[i]
-                        val freq = i * samplingFrequency / (bufferSize * sampleSize)
-
-                        when (freq) {
-                            in freqPins[0] until freqPins[1] ->
-                                if (magnitudes[0] < mag) {
-                                    frequencies[0] = freq
-                                    magnitudes[0] = mag
-                                }
-                            in freqPins[1] until freqPins[2] ->
-                                if (magnitudes[1] < mag) {
-                                    frequencies[1] = freq
-                                    magnitudes[1] = mag
-                                }
-                            in freqPins[2] until freqPins[3] ->
-                                if (magnitudes[2] < mag) {
-                                    frequencies[2] = freq
-                                    magnitudes[2] = mag
-                                }
-                            in freqPins[3] until freqPins[4] ->
-                                if (magnitudes[3] < mag) {
-                                    frequencies[3] = freq
-                                    magnitudes[3] = mag
-                                }
-
-                        }
-
-                    }
-
-                    val highestMagnitude = magnitudes.sorted().last() ?: 0.0f
-
-                    //if (highestMagnitude > silenceThreashold) {
-
-                    for (x in 0 until freqPins.size-1) {
-                        Log.d("SAWTTI", "${frequencies[x]}")
-                        val fp = FPModel(sampleCount, frequencies[x], magnitudes[x], time, x + 1)
-                        peaks.add(fp)
-                    }
-                    Log.d("SAWTTI", "GOOOOOOO")
-
-                    //}
-
-                }
-
-                peakMap()
-
-
-
-
-            }
-
+            private var window = HannWindow()
+            private var fft = FFT(bufferSize, window)
+            private var fftSize = 0
+            private var amplitudes = FloatArray(bufferSize/2)
+            private var time: Double = 0.0
 
             override fun process(audioEvent: AudioEvent): Boolean {
                 Log.d("SWATTI", "process")
-                audioEvents.add(audioEvent)
                 val audioBuffer = audioEvent.floatBuffer
                 fft.forwardTransform(audioBuffer)
                 fft.modulus(audioBuffer, amplitudes)
-                //time = audioEvent.timeStamp
-                //extractPeaks(amplitudes, audioEvent.timeStamp,  amplitudes.size)
-                 for (i in 0 until amplitudes.size) {
-                 //Log.d("SAWTTI", String.format("Amplitude at %3d Hz: %8.3f", fft.binToHz(i, sampleSize.toFloat()) as Int, amplitudes[i]))
-                }
+                time = audioEvent.timeStamp
+                fftSize = fft.size()
+
+
+                extractPeaks(amplitudes, time,  amplitudes.size, fftSize)
+
 
                 return true
             }
 
             override fun processingFinished() {
                 Log.d("SWATTI", "process done")
-                extractPeak()
+                //peakMap()
                 Log.d("SWATTI", "STOP")
 
             }

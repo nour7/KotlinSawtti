@@ -27,13 +27,18 @@ class MainActivity : AppCompatActivity() {
         fingerPrintBtn = findViewById(R.id.fingerPrintsBtn)
 
         listenButton.setOnClickListener {
-            viewModel.listenToMic()
+            if (viewModel.isListening) {
+                viewModel.stopMic()
+            } else {
+                viewModel.listenToMic()
+            }
+
         }
 
         fingerPrintBtn.setOnClickListener {
             val externalSDPath = Environment.getExternalStorageDirectory().absolutePath
 
-            val url = Uri.parse(externalSDPath  + "/music/closer5.wav");
+            val url = Uri.parse(externalSDPath  + "/music/tone400.wav");
             Log.d("SAWTTI", url.path)
             viewModel.fingerPrint(url, "tone400", "test", null)
         }
