@@ -170,7 +170,7 @@ class ViewModel {
                 //averageMagnitude.onNext(average)
             }
 
-        spectrum(bufferSpectrum)
+        //spectrum(bufferSpectrum)
 
     }
 
@@ -202,12 +202,12 @@ class ViewModel {
 
 
     fun hash(peak: Int, peakTime: Double, nextPeak: Int, nextPeakTime: Double): Int {
-        val timeDiff = (nextPeakTime - peakTime).toInt()
+
+        val hash  = HashModel(peak, peakTime, nextPeak, nextPeakTime).hashCode()
+        Log.d("SAWTTI", "hash is $hash")
         val freqDiff = Math.abs(nextPeak - peak)
-        var pins = arrayOf<Int>(0, 0, 0, 0)
-        pins[0] = (Math.abs(((peak + nextPeak).shl(3)) + timeDiff)).toInt()
-        pins[1] = (Math.abs(((nextPeak).shl(3) + peak - freqDiff))).toInt()
-        val peakHash = ((pins[0] * 1000000) + pins[1]).toInt()
+        val peakHash = (hash  + freqDiff).toInt()
+        Log.d("SAWTTI", "peakHash is $peakHash")
         return peakHash
 
     }
@@ -375,11 +375,11 @@ class ViewModel {
                 freq.add(fp.frequency)
                 time.add(fp.time)
 
-                Log.d("SAWTTI", "freq = ${fp.frequency} , time = ${fp.time};")
+                //Log.d("SAWTTI", "freq = ${fp.frequency} , time = ${fp.time};")
             }
 
-            //Log.d("SAWTTI", "freq = $freq;")
-            //Log.d("SAWTTI", "freq = $time;")
+            Log.d("SAWTTI", "freq = $freq;")
+            Log.d("SAWTTI", "time = $time;")
 
         }
 
@@ -398,7 +398,7 @@ class ViewModel {
                 fft.modulus(audioBuffer, amplitudes)
                 time = audioEvent.timeStamp
                 fftSize = fft.size()
-
+                sampleCount += 1
 
                 extractPeaks(amplitudes, time,  amplitudes.size, fftSize)
 
@@ -408,6 +408,8 @@ class ViewModel {
 
             override fun processingFinished() {
                 Log.d("SWATTI", "process done")
+                saveToDatabase()
+                sampleCount = 0
                 //peakMap()
                 Log.d("SWATTI", "STOP")
 
